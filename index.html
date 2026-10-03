@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Goal Guesser</title>
+  <meta name="description" content="Learn how many Premier League goals every player scored, season by season.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23163829'/%3E%3Ctext x='16' y='22' font-family='Trebuchet MS' font-weight='700' font-size='15' fill='white' text-anchor='middle'%3EGG%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    try { const t = localStorage.getItem("gg-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topnav">
+    <a class="logo" href="#/" aria-label="Goal Guesser home">
+      <span>GOAL</span><span>GUESSER</span>
+    </a>
+    <nav class="mainmenu">
+      <a href="#/browse" data-nav="browse">Browse</a>
+      <a href="#/learn" data-nav="learn">Learn</a>
+      <a href="#/flashcards" data-nav="flashcards">Flashcards</a>
+      <a href="#/test" data-nav="test">Test</a>
+      <a href="#/list" data-nav="list">Name&nbsp;Them</a>
+      <a href="#/higher-lower" data-nav="higher-lower">Higher/Lower</a>
+    </nav>
+    <div class="navsearch">
+      <input id="search" type="search" placeholder="Search players…" autocomplete="off" aria-label="Search players">
+      <div id="searchresults" class="searchresults hidden"></div>
+    </div>
+    <button id="themetoggle" class="iconbtn" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
+  </header>
+  <div class="subnav" id="subnav"></div>
+  <main id="main"><div class="empty">Loading…</div></main>
+  <footer>
+    Premier League goals only (penalties included, own goals excluded).
+    Data: <a href="https://github.com/TimHoare/Premier_League_Data">TimHoare/Premier_League_Data</a> (1992/93–2019/20) and
+    <a href="https://github.com/vaastav/Fantasy-Premier-League">vaastav/Fantasy-Premier-League</a> (2020/21 onwards).
+  </footer>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
