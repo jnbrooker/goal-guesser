@@ -14,6 +14,7 @@ least one league goal for a club in a season appear.
 Usage: python3 scripts/build_data.py   (downloads sources into .cache/)
 """
 import csv
+import hashlib
 import json
 import re
 from collections import Counter
@@ -203,8 +204,12 @@ rows = sorted(
     ([pi[p], si[s], ci[c], n] for (p, s, c), n in goals.items()),
     key=lambda r: (r[1], -r[3], r[0]),
 )
+# Both files carry the same version so the app never pairs a stale matches.json
+# with a newer goals.json (row order must line up).
+version = hashlib.sha1(json.dumps([rows, list(goals)], default=str).encode()).hexdigest()[:10]
 OUT.parent.mkdir(exist_ok=True)
 OUT.write_text(json.dumps({
+    "version": version,
     "seasons": seasons, "clubs": clubs,
     "players": [RENAME.get(names[k], names[k]) for k in keys],
     "pos": [positions[k].most_common(1)[0][0] if positions[k] else "" for k in keys],
@@ -224,6 +229,7 @@ for p, s, c, _ in rows:
         for mk, mins in sorted(entries.items(), key=lambda e: mi[e[0]])
     ])
 OUT_MATCHES.write_text(json.dumps({
+    "version": version,
     "matches": [[si[g[0]], g[1], ci[g[2]], ci[g[3]], g[4], g[5]] for g in (games[mk] for mk in match_keys)],
     "goals": row_logs,
 }, separators=(",", ":")))

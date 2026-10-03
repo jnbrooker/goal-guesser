@@ -186,7 +186,7 @@ function logHighlights(log) {
   const parts = [`Scored in <b>${log.length}</b> match${log.length === 1 ? "" : "es"}`];
   if (hats) parts.push(`<b>${hats}</b> hat-trick${hats === 1 ? "" : "s"}`);
   if (multi.length - hats) parts.push(`<b>${multi.length - hats}</b> brace${multi.length - hats === 1 ? "" : "s"}`);
-  if (log.some((m) => m.minutes)) parts.push(`<b>${pens}</b> penalt${pens === 1 ? "y" : "ies"}`);
+  if (pens) parts.push(`<b>${pens}</b> penalt${pens === 1 ? "y" : "ies"}`);
   if (favN >= 2) parts.push(`most vs ${esc(DB.clubs[favOpp])} (<b>${favN}</b>)`);
   return parts.join(" · ");
 }
@@ -197,8 +197,13 @@ export async function renderGoalLog(el, r) {
   let log;
   try {
     log = await goalLog(r);
-  } catch {
-    el.innerHTML = `<div class="muted small" style="padding:6px">Couldn't load match details.</div>`;
+  } catch (err) {
+    el.innerHTML = `<div class="muted small" style="padding:6px">Couldn't load match details (${esc(err.message)}).
+      <a href="#" data-retry>Try again</a></div>`;
+    el.querySelector("[data-retry]").onclick = (e) => {
+      e.preventDefault();
+      renderGoalLog(el, r);
+    };
     return;
   }
   const hasMinutes = log.some((m) => m.minutes);

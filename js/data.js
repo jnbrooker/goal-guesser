@@ -9,8 +9,11 @@ export const DB = {
 };
 
 export async function loadData() {
-  const res = await fetch("data/goals.json");
+  // "no-cache" revalidates with the server, so a new deploy is picked up straight away.
+  const res = await fetch("data/goals.json", { cache: "no-cache" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const d = await res.json();
+  DB.version = d.version;
   DB.seasons = d.seasons;
   DB.clubs = d.clubs;
   DB.players = d.players;
@@ -31,10 +34,23 @@ export async function loadData() {
 }
 
 // Match-by-match detail lives in a bigger file, fetched once on first use.
+// The version in the URL stops a stale cached copy being used; a failed load
+// is forgotten so the next request tries again.
 let details = null;
 export function loadDetails() {
-  details ??= fetch("data/matches.json").then((res) => res.json());
+  details ??= fetchDetails().catch((err) => {
+    details = null;
+    throw err;
+  });
   return details;
+}
+
+async function fetchDetails() {
+  const res = await fetch(`data/matches.json?v=${DB.version}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  if (d.version !== DB.version) throw new Error("match data is out of date — reload the page");
+  return d;
 }
 
 /**
