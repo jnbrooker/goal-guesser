@@ -3,7 +3,7 @@
 
 import { DB } from "../data.js";
 import { record, pickForStudy, prefs } from "../store.js";
-import { $, $$, esc, clubTag, filterPanel, loadFilter, goalOptions, grade, shuffle } from "../ui.js";
+import { $, $$, esc, clubTag, filterPanel, loadFilter, goalOptions, grade, shuffle, goalHighlights, playerMeta } from "../ui.js";
 
 const ROUND = 7;
 
@@ -70,6 +70,7 @@ export function render(el, params) {
       <div class="progressbar"><i style="width:${(done / (items.length * 2)) * 100}%"></i></div>
       <div class="qcard">
         <div class="qlabel">${typed ? "Type the answer" : "Multiple choice"}</div>
+        <div class="meta" style="margin-bottom:4px">${playerMeta(r.p)}</div>
         <div class="qtext">How many Premier League goals did <b>${esc(DB.players[r.p])}</b> score for ${clubTag(r.c)} in <b>${DB.seasons[r.s]}</b>?</div>
         ${typed
           ? `<form class="answerrow" id="ln-form"><input id="ln-input" type="number" min="0" inputmode="numeric" placeholder="Goals" autocomplete="off">
@@ -121,9 +122,11 @@ export function render(el, params) {
       : result === "close" ? `So close — it was <b>${r.g}</b>.`
       : `The answer is <b>${r.g}</b>.`;
     fb.innerHTML = `<div class="feedback ${result}">${msg}
-      ${ok ? "" : `<span class="muted"> You'll see this again.</span>`}</div>
+      ${ok ? "" : `<span class="muted"> You'll see this again.</span>`}
+      <div class="small" id="ln-hl" style="margin-top:4px"></div></div>
       <div class="btnrow" style="margin-top:10px"><button class="btn" id="ln-next">Continue <span class="kbd" style="color:#fff">↵</span></button></div>`;
     $("#ln-next", el).onclick = ask;
+    goalHighlights(r).then((h) => { const box = $("#ln-hl", el); if (box) box.innerHTML = h; }).catch(() => {});
     // Correct answers move on by themselves after a moment.
     const item = current;
     if (ok) setTimeout(() => { if (answered && current === item && el.isConnected) ask(); }, 900);

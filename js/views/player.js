@@ -1,6 +1,6 @@
 import { DB, clubRank } from "../data.js";
 import { summary } from "../store.js";
-import { esc, clubTag, bar, goalSq, masteryDot, ordinal, sectionTitle } from "../ui.js";
+import { $$, esc, clubTag, bar, goalSq, masteryDot, ordinal, sectionTitle, playerMeta, renderGoalLog } from "../ui.js";
 
 export function render(el, params, arg) {
   const p = parseInt(arg, 10);
@@ -17,16 +17,17 @@ export function render(el, params, arg) {
   el.innerHTML = `
     <div class="pagehead">
       <h1>${esc(DB.players[p])}</h1>
-      <span class="sub">${DB.careerGoals[p]} Premier League goals · ${rows.length} scoring season${rows.length === 1 ? "" : "s"} ·
+      <span class="sub"><b>${playerMeta(p)}</b> · ${DB.careerGoals[p]} Premier League goals · ${rows.length} scoring season${rows.length === 1 ? "" : "s"} ·
         ${clubs.length} club${clubs.length === 1 ? "" : "s"}</span>
     </div>
-    <div class="grid2">
+    <div class="grid2 wide-left">
       <div>
         ${sectionTitle("Season by season")}
+        <div class="small muted" style="margin:-4px 0 6px">Click a season to see every goal.</div>
         <div class="card tablewrap">
           <table class="dg">
             <tr><th>Season</th><th>Club</th><th class="num">Goals</th><th></th><th>At club</th><th>M</th></tr>
-            ${rows.map((r) => `<tr>
+            ${rows.map((r) => `<tr class="expandable" data-row="${r.id}">
               <td><a href="#/browse?season=${r.s}">${DB.seasons[r.s]}</a></td>
               <td>${clubTag(r.c)}</td>
               <td class="num">${goalSq(r.g)}</td>
@@ -59,4 +60,18 @@ export function render(el, params, arg) {
         </div>
       </div>
     </div>`;
+
+  $$("tr.expandable", el).forEach((tr) => {
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return;
+      const open = tr.nextElementSibling?.classList.contains("logrow");
+      tr.classList.toggle("open", !open);
+      if (open) return tr.nextElementSibling.remove();
+      const logRow = document.createElement("tr");
+      logRow.className = "logrow";
+      logRow.innerHTML = `<td colspan="6"><div></div></td>`;
+      tr.after(logRow);
+      renderGoalLog(logRow.querySelector("div"), DB.rows[+tr.dataset.row]);
+    });
+  });
 }

@@ -1,6 +1,6 @@
-import { DB, clubRank, seasonTotal } from "../data.js";
+import { DB, clubRank, seasonTotal, loadDetails } from "../data.js";
 import { record, box, prefs } from "../store.js";
-import { $, esc, clubTag, filterPanel, loadFilter, shuffle, ordinal } from "../ui.js";
+import { $, esc, clubTag, filterPanel, loadFilter, shuffle, ordinal, playerMeta, renderGoalLog } from "../ui.js";
 
 export function render(el, params) {
   const filter = loadFilter("flashcards", params, 5);
@@ -77,14 +77,15 @@ export function render(el, params) {
         <div class="inner">
           <div class="face front">
             <div class="who">${esc(DB.players[r.p])}</div>
+            <div class="meta">${playerMeta(r.p)}</div>
             <div class="ctx">${clubTag(r.c)} <span class="muted">·</span> <b>${DB.seasons[r.s]}</b></div>
             <div class="extra">How many Premier League goals?</div>
             <div class="hint">click or space to flip</div>
           </div>
           <div class="face back">
             <div class="goals">${r.g}</div>
-            <div class="ctx">${esc(DB.players[r.p])} · ${clubTag(r.c)} · ${DB.seasons[r.s]}</div>
-            <div class="extra">${ordinal(clubRank(r))} highest scorer at the club that season${total !== r.g ? ` · ${total} total that season across clubs` : ""}</div>
+            <div class="ctx"><span>${esc(DB.players[r.p])}</span><span>${clubTag(r.c)}</span><span>${DB.seasons[r.s]}</span></div>
+            <div class="extra">${clubRank(r) === 1 ? "Club's top scorer that season" : `${ordinal(clubRank(r))}-highest scorer at the club that season`}${total !== r.g ? ` · ${total} total that season across clubs` : ""}</div>
           </div>
         </div>
       </div>
@@ -93,7 +94,8 @@ export function render(el, params) {
         <button class="btn red" data-no>Still learning <span class="kbd" style="color:#fff">1</span></button>
         <button class="btn" data-yes>Know it <span class="kbd" style="color:#fff">2</span></button>
         <button class="btn ghost" data-skip>Skip ›</button>
-      </div>`;
+      </div>
+      <div class="logpanel hidden" id="fc-log"><div class="subhead">▾ Every goal</div><div></div></div>`;
     $("#card", body).onclick = flip;
     $("[data-no]", body).onclick = () => answer(false);
     $("[data-yes]", body).onclick = () => answer(true);
@@ -102,7 +104,15 @@ export function render(el, params) {
   }
 
   function flip() {
-    $("#card", el)?.classList.toggle("flipped");
+    const card = $("#card", el);
+    if (!card) return;
+    card.classList.toggle("flipped");
+    // Reveal the match-by-match log the first time the answer is shown.
+    const panel = $("#fc-log", el);
+    if (card.classList.contains("flipped") && panel.classList.contains("hidden")) {
+      panel.classList.remove("hidden");
+      renderGoalLog(panel.lastElementChild, deck[i]);
+    }
   }
 
   function answer(ok) {
@@ -122,5 +132,6 @@ export function render(el, params) {
     else if (e.key === "ArrowLeft") { i = Math.max(0, i - 1); show(); }
   }
   document.addEventListener("keydown", onKey);
+  loadDetails();
   return () => document.removeEventListener("keydown", onKey);
 }

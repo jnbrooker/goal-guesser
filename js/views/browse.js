@@ -1,4 +1,4 @@
-import { DB, latestSeason, clubsIn, fold } from "../data.js";
+import { DB, latestSeason, clubsIn, fold, POSITIONS } from "../data.js";
 import { prefs } from "../store.js";
 import { $, $$, esc, clubTag, playerLink, goalSq, bar, masteryDot, sectionTitle } from "../ui.js";
 
@@ -17,6 +17,7 @@ export function render(el, params) {
     let rows = DB.bySeason[s].filter((r) => club < 0 || r.c === club);
     if (q) rows = rows.filter((r) => DB.foldedNames[r.p].includes(q));
     if (sort === "name") rows = [...rows].sort((a, b) => DB.players[a.p].split(" ").pop().localeCompare(DB.players[b.p].split(" ").pop()));
+    if (sort === "pos") rows = [...rows].sort((a, b) => "GDMF".indexOf(DB.pos[a.p]) - "GDMF".indexOf(DB.pos[b.p]) || b.g - a.g);
     if (sort === "club") rows = [...rows].sort((a, b) => DB.clubs[a.c].localeCompare(DB.clubs[b.c]) || b.g - a.g);
     const max = rows.reduce((m, r) => Math.max(m, r.g), 1);
     const total = DB.bySeason[s].reduce((t, r) => t + r.g, 0);
@@ -53,6 +54,7 @@ export function render(el, params) {
           <tr>
             <th>#</th>
             <th class="sortable" data-sort="name">Player</th>
+            <th class="sortable" data-sort="pos" title="Position">Pos</th>
             <th class="sortable" data-sort="club">Club</th>
             <th class="sortable num" data-sort="goals">Goals</th>
             <th></th>
@@ -61,10 +63,11 @@ export function render(el, params) {
           ${rows.map((r, i) => `<tr>
             <td class="rank">${i + 1}</td>
             <td class="name">${playerLink(r.p)}</td>
+            <td class="muted" title="${POSITIONS[DB.pos[r.p]] || ""}">${DB.pos[r.p]}</td>
             <td>${clubTag(r.c, true)}</td>
             <td class="num">${goalSq(r.g, cover)}</td>
             <td class="barcell">${cover ? "" : bar(r.g, max)}</td>
-            <td>${masteryDot(r)}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">No scorers match.</td></tr>`}
+            <td>${masteryDot(r)}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">No scorers match.</td></tr>`}
         </table>
       </div>`;
 

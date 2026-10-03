@@ -4,7 +4,7 @@
 //   { id, p: playerIdx, s: seasonIdx, c: clubIdx, g: goals }
 
 export const DB = {
-  seasons: [], clubs: [], players: [], rows: [],
+  seasons: [], clubs: [], players: [], pos: [], nat: [], rows: [],
   bySeason: [], byPlayer: [], careerGoals: [],
 };
 
@@ -14,6 +14,8 @@ export async function loadData() {
   DB.seasons = d.seasons;
   DB.clubs = d.clubs;
   DB.players = d.players;
+  DB.pos = d.pos;
+  DB.nat = d.nat;
   DB.rows = d.rows.map(([p, s, c, g], id) => ({ id, p, s, c, g }));
   DB.bySeason = d.seasons.map(() => []);
   DB.byPlayer = d.players.map(() => []);
@@ -27,6 +29,35 @@ export async function loadData() {
   for (const list of DB.byPlayer) list.sort((a, b) => a.s - b.s || b.g - a.g);
   DB.foldedNames = DB.players.map(fold);
 }
+
+// Match-by-match detail lives in a bigger file, fetched once on first use.
+let details = null;
+export function loadDetails() {
+  details ??= fetch("data/matches.json").then((res) => res.json());
+  return details;
+}
+
+/**
+ * The matches a row's goals came in, oldest first:
+ * { date, home, opp, scored, conceded, result: "W"|"D"|"L", n, minutes: ["28", "45+2p"] | null }
+ * Minutes are only known up to 2019/20.
+ */
+export async function goalLog(r) {
+  const d = await loadDetails();
+  return d.goals[r.id].map(([mi, mins]) => {
+    const [, date, h, a, hs, as] = d.matches[mi];
+    const home = h === r.c;
+    const scored = home ? hs : as, conceded = home ? as : hs;
+    const minutes = typeof mins === "string" ? mins.split(",") : null;
+    return {
+      date, home, opp: home ? a : h, scored, conceded,
+      result: scored > conceded ? "W" : scored < conceded ? "L" : "D",
+      n: minutes ? minutes.length : mins, minutes,
+    };
+  });
+}
+
+export const POSITIONS = { G: "Goalkeeper", D: "Defender", M: "Midfielder", F: "Forward" };
 
 export const name = (r) => DB.players[r.p];
 export const season = (r) => DB.seasons[r.s];

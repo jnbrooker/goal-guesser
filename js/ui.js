@@ -1,6 +1,6 @@
 // Shared rendering helpers.
 
-import { DB, clubColour, clubsIn, filterRows, latestSeason } from "./data.js";
+import { DB, clubColour, clubsIn, filterRows, latestSeason, goalLog, POSITIONS } from "./data.js";
 import { box, prefs, summary } from "./store.js";
 
 export const $ = (sel, el = document) => el.querySelector(sel);
@@ -160,3 +160,58 @@ export function goalOptions(g, n = 4) {
 
 /** Describe a row as "for Arsenal in 2003/04". */
 export const rowContext = (r) => `${clubTag(r.c)} <span class="muted">·</span> ${DB.seasons[r.s]}`;
+
+/** "Forward · England" */
+export function playerMeta(p) {
+  return [POSITIONS[DB.pos[p]], DB.nat[p]].filter(Boolean).map(esc).join(" · ");
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortDate = (iso) => `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]}`;
+const minuteLabel = (m) => (m.endsWith("p") ? `${m.slice(0, -1)}′ <span class="pen">pen</span>` : `${m}′`);
+
+/** One-line summary of a row's goals, e.g. for answer feedback. */
+export async function goalHighlights(r) {
+  return logHighlights(await goalLog(r));
+}
+
+/** Memorable hooks: braces, hat-tricks, penalties, favourite opponent. */
+function logHighlights(log) {
+  const multi = log.filter((m) => m.n >= 2);
+  const hats = log.filter((m) => m.n >= 3).length;
+  const pens = log.reduce((t, m) => t + (m.minutes ? m.minutes.filter((x) => x.endsWith("p")).length : 0), 0);
+  const byOpp = new Map();
+  for (const m of log) byOpp.set(m.opp, (byOpp.get(m.opp) || 0) + m.n);
+  const [favOpp, favN] = [...byOpp].sort((a, b) => b[1] - a[1])[0] || [];
+  const parts = [`Scored in <b>${log.length}</b> match${log.length === 1 ? "" : "es"}`];
+  if (hats) parts.push(`<b>${hats}</b> hat-trick${hats === 1 ? "" : "s"}`);
+  if (multi.length - hats) parts.push(`<b>${multi.length - hats}</b> brace${multi.length - hats === 1 ? "" : "s"}`);
+  if (log.some((m) => m.minutes)) parts.push(`<b>${pens}</b> penalt${pens === 1 ? "y" : "ies"}`);
+  if (favN >= 2) parts.push(`most vs ${esc(DB.clubs[favOpp])} (<b>${favN}</b>)`);
+  return parts.join(" · ");
+}
+
+/** Fill `el` with a row's match-by-match goal log. */
+export async function renderGoalLog(el, r) {
+  el.innerHTML = `<div class="muted small" style="padding:6px">Loading goals…</div>`;
+  let log;
+  try {
+    log = await goalLog(r);
+  } catch {
+    el.innerHTML = `<div class="muted small" style="padding:6px">Couldn't load match details.</div>`;
+    return;
+  }
+  const hasMinutes = log.some((m) => m.minutes);
+  el.innerHTML = `
+    <div class="loghead">${logHighlights(log)}</div>
+    <table class="dg goallog">
+      <tr><th>Date</th><th>Opponent</th><th>Result</th><th>Goals</th>${hasMinutes ? "<th>Minutes</th>" : ""}</tr>
+      ${log.map((m) => `<tr>
+        <td class="muted">${shortDate(m.date)}</td>
+        <td>${clubTag(m.opp, true)} <span class="muted small">(${m.home ? "H" : "A"})</span></td>
+        <td><span class="res ${m.result}">${m.result}</span> ${m.scored}–${m.conceded}</td>
+        <td>⚽${m.n > 1 ? `<b>×${m.n}</b>` : ""}</td>
+        ${hasMinutes ? `<td class="small mins">${m.minutes.map(minuteLabel).join(", ")}</td>` : ""}</tr>`).join("")}
+    </table>
+    ${hasMinutes ? "" : `<div class="muted small" style="padding:4px 6px">Goal minutes aren't available from 2020/21 onwards.</div>`}`;
+}
