@@ -8,9 +8,10 @@ import * as learn from "./views/learn.js";
 import * as test from "./views/test.js";
 import * as list from "./views/list.js";
 import * as higherLower from "./views/higherlower.js";
+import * as misc from "./views/misc.js";
 
 const ROUTES = {
-  "": home, browse, player, flashcards, learn, test, list, "higher-lower": higherLower,
+  "": home, browse, player, flashcards, learn, test, list, "higher-lower": higherLower, misc,
 };
 
 let cleanup = null;

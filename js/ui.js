@@ -1,6 +1,6 @@
 // Shared rendering helpers.
 
-import { DB, clubColour, clubsIn, filterRows, latestSeason, goalLog, POSITIONS } from "./data.js";
+import { DB, clubColour, clubsIn, filterRows, latestSeason, goalLog, POSITIONS, fold } from "./data.js";
 import { box, prefs, summary } from "./store.js";
 
 export const $ = (sel, el = document) => el.querySelector(sel);
@@ -219,4 +219,34 @@ export async function renderGoalLog(el, r) {
         ${hasMinutes ? `<td class="small mins">${m.minutes.map(minuteLabel).join(", ")}</td>` : ""}</tr>`).join("")}
     </table>
     ${hasMinutes ? "" : `<div class="muted small" style="padding:4px 6px">Goal minutes aren't available from 2020/21 onwards.</div>`}`;
+}
+
+/**
+ * Accepted answers for a name-them quiz: full name, surname, last two words
+ * ("van Persie"), first + last. Peerage titles count too, so "Robert
+ * Jenkinson, 2nd Earl of Liverpool" also accepts "Liverpool" and "Lord Liverpool".
+ */
+export function nameKeys(name) {
+  const [main, ...titles] = name.split(", ");
+  const f = fold(main).replace(/ the (younger|elder)$/, "");
+  const parts = f.split(" ");
+  const keys = new Set([fold(main), f, f.replace(/ /g, "")]);
+  if (parts.length > 1) {
+    keys.add(parts[parts.length - 1]);
+    keys.add(parts.slice(-2).join(" "));
+    keys.add(parts.slice(1).join(" "));
+    keys.add(parts[0] + " " + parts[parts.length - 1]);
+  }
+  for (const t of titles) {
+    const title = fold(t.replace(/^\d+(st|nd|rd|th) /, "")); // "earl of liverpool"
+    const m = title.match(/^(duke|marquess|earl|viscount|baron|lord) (?:of )?(.+)$/);
+    if (!m) continue;
+    const place = m[2];
+    keys.add(title);
+    keys.add(place);
+    keys.add(place.split(" ")[0]); // "newcastle upon tyne" -> "newcastle"
+    keys.add("lord " + place);
+  }
+  keys.delete("");
+  return keys;
 }

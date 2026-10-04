@@ -3,7 +3,7 @@
 
 import { DB, fold, filterRows } from "../data.js";
 import { record, prefs } from "../store.js";
-import { $, $$, esc, clubTag, filterPanel, loadFilter, goalSq, plural } from "../ui.js";
+import { $, $$, esc, clubTag, filterPanel, loadFilter, goalSq, plural, nameKeys } from "../ui.js";
 
 export function render(el, params) {
   const filter = loadFilter("list", params, 8);
@@ -25,7 +25,7 @@ export function render(el, params) {
   function setup(rows) {
     stop();
     state = "ready";
-    slots = [...rows].sort((a, b) => b.g - a.g || a.c - b.c).map((r) => ({ r, found: false, keys: answerKeys(DB.players[r.p]) }));
+    slots = [...rows].sort((a, b) => b.g - a.g || a.c - b.c).map((r) => ({ r, found: false, keys: nameKeys(DB.players[r.p]) }));
     remaining = Math.min(20 * 60, Math.max(60, slots.length * 12));
     draw();
   }
@@ -132,20 +132,6 @@ export function render(el, params) {
   }
 
   return stop;
-}
-
-/** Accepted spellings: full name, surname, and last two words ("van Persie"). */
-function answerKeys(name) {
-  const f = fold(name);
-  const parts = f.split(" ");
-  const keys = new Set([f, f.replace(/ /g, "")]);
-  if (parts.length > 1) {
-    keys.add(parts[parts.length - 1]);
-    keys.add(parts.slice(-2).join(" "));
-    keys.add(parts.slice(1).join(" "));
-    keys.add(parts[0] + " " + parts[parts.length - 1]);
-  }
-  return keys;
 }
 
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
