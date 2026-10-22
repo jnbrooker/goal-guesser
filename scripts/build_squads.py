@@ -102,6 +102,8 @@ def tables(html):
 
 
 def text(v):
+    if isinstance(v, pd.Series):  # duplicate column names (regular season + playoffs): take the first
+        v = v.iloc[0] if len(v) else ""
     s = "" if pd.isna(v) else str(v)
     s = re.sub(r"\[.*?\]|[*†‡^§#¤]", "", s)
     return re.sub(r"\s+", " ", s).strip()
@@ -129,9 +131,31 @@ def position(v):
     return POS.get(first, "")
 
 
+# FIFA codes some pages show instead of a country name.
+FIFA = {
+    "ALG": "Algeria", "ARG": "Argentina", "AUS": "Australia", "AUT": "Austria", "BEL": "Belgium", "BIH": "Bosnia and Herzegovina",
+    "BRA": "Brazil", "BUL": "Bulgaria", "CAN": "Canada", "CHI": "Chile", "CIV": "Ivory Coast", "CMR": "Cameroon", "COD": "DR Congo",
+    "COL": "Colombia", "CRC": "Costa Rica", "CRO": "Croatia", "CZE": "Czech Republic", "DEN": "Denmark", "ECU": "Ecuador",
+    "EGY": "Egypt", "ENG": "England", "ESP": "Spain", "EST": "Estonia", "FIN": "Finland", "FRA": "France", "GAB": "Gabon",
+    "GER": "Germany", "GHA": "Ghana", "GRE": "Greece", "GUI": "Guinea", "HUN": "Hungary", "IRL": "Republic of Ireland",
+    "ISL": "Iceland", "ISR": "Israel", "ITA": "Italy", "JPN": "Japan", "KOR": "South Korea", "MAR": "Morocco", "MEX": "Mexico",
+    "MKD": "North Macedonia", "MLI": "Mali", "MNE": "Montenegro", "NED": "Netherlands", "NGA": "Nigeria", "NIR": "Northern Ireland",
+    "NOR": "Norway", "PAR": "Paraguay", "PER": "Peru", "POL": "Poland", "POR": "Portugal", "ROU": "Romania", "RUS": "Russia",
+    "SCO": "Scotland", "SEN": "Senegal", "SRB": "Serbia", "SUI": "Switzerland", "SVK": "Slovakia", "SVN": "Slovenia",
+    "SWE": "Sweden", "TOG": "Togo", "TUN": "Tunisia", "TUR": "Turkey", "UKR": "Ukraine", "URU": "Uruguay", "USA": "United States",
+    "VEN": "Venezuela", "WAL": "Wales", "YUG": "Yugoslavia", "ZAM": "Zambia", "ZIM": "Zimbabwe", "GEO": "Georgia",
+    "ARM": "Armenia", "ALB": "Albania", "BLR": "Belarus", "LTU": "Lithuania", "LVA": "Latvia", "KOS": "Kosovo", "JAM": "Jamaica",
+    "TRI": "Trinidad and Tobago", "RSA": "South Africa", "BFA": "Burkina Faso", "CPV": "Cape Verde", "ANG": "Angola",
+    "GNB": "Guinea-Bissau", "SCG": "Serbia and Montenegro", "TCH": "Czechoslovakia", "URS": "Soviet Union", "FRG": "West Germany",
+}
+
+
 def nation(v):
-    """"Spain ESP" -> "Spain" (flag link title plus the three-letter code)."""
-    return re.sub(r"\s+[A-Z]{3}$", "", text(v)).strip()
+    """"Spain ESP" -> "Spain" (flag link title plus the code); a bare code -> its country."""
+    t = text(v)
+    if t in FIFA:
+        return FIFA[t]
+    return re.sub(r"\s+[A-Z]{3}$", "", t).strip()
 
 
 def apps_value(s):
@@ -354,7 +378,11 @@ def main():
             title = find_page(season, team)
             html = page_html(title) if title else ""
             parse = {"football": lambda h: football_squad(h, cid), "nba": nba_squad, "mlb": mlb_squad, "nhl": nhl_squad}[sport]
-            players = parse(html) if html else None
+            try:
+                players = parse(html) if html else None
+            except Exception as e:  # one odd page shouldn't stop the whole build
+                print(f"  ! {label} {season} {team}: {e}")
+                players = None
             if not players or len(players) < 8:
                 missing.append(f"{label} {season} {team}" + ("" if title else " (no page)"))
                 continue
