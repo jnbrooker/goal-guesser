@@ -390,3 +390,9 @@ tr.expandable td:first-child::before { content: "▸ "; color: var(--muted); fon
 tr.expandable.open td:first-child::before { content: "▾ "; }
 tr.logrow > td { padding: 0 0 8px 18px; background: var(--panel-2); white-space: normal; }
 tr.logrow:hover > td { background: var(--panel-2); }
+
+.updatebar {
+  display: flex; align-items: center; justify-content: center; gap: 12px; padding: 6px 16px;
+  background: var(--green-dark); color: #fff; font-size: 13px; font-weight: 700;
+}
+.updatebar .btn { background: #fff; color: var(--green-dark); border-color: #fff; padding: 3px 10px; }

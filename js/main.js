@@ -90,6 +90,33 @@ function setupTheme() {
   }
 }
 
+// A deploy updates every file's Last-Modified on GitHub Pages, so a change in
+// index.html's means a new version is live. Check when the user navigates or
+// comes back to the tab (at most once a minute) and offer a reload.
+let siteVersion = null, lastCheck = 0;
+async function deployedVersion() {
+  const res = await fetch("index.html", { method: "HEAD", cache: "no-cache" });
+  return res.headers.get("last-modified") || res.headers.get("etag");
+}
+async function checkForUpdate() {
+  if (Date.now() - lastCheck < 60_000 || $("#updatebar")) return;
+  lastCheck = Date.now();
+  try {
+    const v = await deployedVersion();
+    if (siteVersion && v && v !== siteVersion) {
+      document.body.insertAdjacentHTML("afterbegin", `<div id="updatebar" class="updatebar">
+        A new version of Goal Guesser is available. <button class="btn" onclick="location.reload()">Reload</button></div>`);
+    }
+  } catch {
+    /* offline — try again later */
+  }
+}
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+deployedVersion().then((v) => (siteVersion = v)).catch(() => {});
+addEventListener("hashchange", checkForUpdate);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
+
 setupTheme();
 loadData().then(() => {
   subnav();
