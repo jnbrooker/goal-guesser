@@ -396,3 +396,9 @@ tr.logrow:hover > td { background: var(--panel-2); }
   background: var(--green-dark); color: #fff; font-size: 13px; font-weight: 700;
 }
 .updatebar .btn { background: #fff; color: var(--green-dark); border-color: #fff; padding: 3px 10px; }
+
+/* hard mode */
+.slot.pickable { cursor: pointer; }
+.slot.pickable:hover { background: var(--panel-2); }
+.slot.active { outline: 2px solid var(--green); outline-offset: -2px; background: var(--green-soft); }
+.slot .guess { font-weight: 400; color: var(--muted); font-size: 11px; text-decoration: line-through; }

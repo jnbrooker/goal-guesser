@@ -6,9 +6,10 @@
 // many times only needs typing once.
 
 import { prefs } from "../store.js";
-import { $, $$, esc, sectionTitle, nameKeys, plural } from "../ui.js";
+import { $, $$, esc, sectionTitle, nameKeys } from "../ui.js";
 import { fold } from "../data.js";
 import * as squads from "./squads.js";
+import { nameQuiz } from "../namequiz.js";
 
 const SINCE = [0, 1900, 1950, 1980, 2000];
 
@@ -149,7 +150,7 @@ function quiz(el, cat) {
   let showClues = pref("clues", true);
   let showExtra = pref("extra", false);
   const hasExtra = cat.sets.some((s) => s.items.some((it) => it.extra));
-  let slots = [], answers = new Map(), state = "ready", remaining = 0, timer = null;
+  let stop = null;
 
   el.innerHTML = `<div class="pagehead"><h1>${esc(cat.title)}</h1>
       <span class="sub"><a href="#/misc">Misc</a> › ${esc(cat.sub)}</span></div>
@@ -185,9 +186,9 @@ function quiz(el, cat) {
       changed();
     }));
     $("#mq-since", el).onchange = (e) => { since = +e.target.value; changed(); };
-    $("#mq-clues", el).onchange = (e) => { showClues = e.target.checked; save("clues", showClues); draw(); };
+    $("#mq-clues", el).onchange = (e) => { showClues = e.target.checked; save("clues", showClues); build(); };
     const ex = $("#mq-extra", el);
-    if (ex) ex.onchange = (e) => { showExtra = e.target.checked; save("extra", showExtra); draw(); };
+    if (ex) ex.onchange = (e) => { showExtra = e.target.checked; save("extra", showExtra); build(); };
   }
 
   function changed() {
@@ -198,10 +199,7 @@ function quiz(el, cat) {
   }
 
   function build() {
-    stop();
-    state = "ready";
-    slots = [];
-    answers = new Map();
+    stop?.();
     const sets = cat.sets.filter((s) => chosen.has(s.id));
     const items = sets.flatMap((s) => s.items.filter((it) => it.to >= since).map((it) => ({ set: s, it })));
 
@@ -211,112 +209,34 @@ function quiz(el, cat) {
       for (const w of new Set(fold(a).split(" "))) wordCounts.set(w, (wordCounts.get(w) || 0) + 1);
     }
 
-    for (const { set, it } of items) {
-      // One answer per list: a club in both the Bundesliga and Champions League is two answers.
-      const key = set.id + "|" + it.answer;
-      if (!answers.has(key)) {
-        const keys = cat.kind === "person" ? nameKeys(it.answer) : teamKeys(it.answer, cat.kind, wordCounts);
-        for (const a of ALIASES[it.answer] || []) keys.add(fold(a));
-        answers.set(key, { name: it.answer, keys, found: false });
-      }
-      slots.push({ set, answer: answers.get(key), it });
-    }
-    remaining = Math.min(30 * 60, Math.max(90, answers.size * 15));
-    draw();
-  }
+    const keysFor = new Map();
+    const groups = sets.map((set) => ({
+      title: `${set.emoji} ${set.title}`,
+      slots: items.filter((x) => x.set === set).map(({ it }) => {
+        // One answer per list: a club in both the Bundesliga and Champions League is two answers.
+        const answer = set.id + "|" + it.answer;
+        if (!keysFor.has(answer)) {
+          const keys = cat.kind === "person" ? nameKeys(it.answer) : teamKeys(it.answer, cat.kind, wordCounts);
+          for (const a of ALIASES[it.answer] || []) keys.add(fold(a));
+          keysFor.set(answer, keys);
+        }
+        return {
+          answer, name: displayName(it.answer), keys: keysFor.get(answer),
+          label: `${set.label} ${it.clue}${showExtra && it.extra ? ` (${it.extra})` : ""}`,
+          left: (over) => (showClues || over ? `<span class="small muted" style="min-width:74px">${esc(it.clue)}</span>` : ""),
+          right: (over) => (it.extra && (showExtra || over) ? `<span class="small muted">${esc(it.extra)}</span>` : ""),
+        };
+      }),
+    })).filter((g) => g.slots.length);
 
-  function foundCount() {
-    return [...answers.values()].filter((a) => a.found).length;
-  }
-
-  function draw() {
-    const body = $("#mq-body", el);
-    if (!slots.length) {
-      body.innerHTML = `<div class="empty">Pick at least one list above${since ? " (or try an earlier “since” year)" : ""}.</div>`;
-      return;
-    }
-    const groups = cat.sets.filter((s) => slots.some((sl) => sl.set === s));
-    const total = answers.size;
-    body.innerHTML = `
-      <div class="quizbar">
-        <b style="font-size:14px">${groups.length === 1 ? `${groups[0].emoji} ${esc(groups[0].title)}` : `${groups.length} lists`}${since ? ` since ${since}` : ""}</b>
-        ${state === "ready"
-          ? `<button class="btn" id="mq-start">Start quiz</button>`
-          : `<input id="mq-input" type="text" placeholder="Enter an answer…" autocomplete="off" autocapitalize="off" spellcheck="false" ${state === "over" ? "disabled" : ""}>`}
-        <span style="margin-left:auto" class="score" id="mq-score">${foundCount()}/${total}</span>
-        <span class="timer" id="mq-timer">${fmt(remaining)}</span>
-        ${state === "playing" ? `<button class="btn ghost" id="mq-giveup">Give up</button>` : ""}
-        ${state === "over" ? `<button class="btn" id="mq-retry">Play again</button>` : ""}
-      </div>
-      ${state === "over" ? `<div class="feedback ${foundCount() === total ? "ok" : "bad"}" style="margin-top:10px">
-        You named <b>${foundCount()}</b> of ${plural(total, cat.noun)} (${Math.round((foundCount() / total) * 100)}%). Missed answers are in red.</div>` : ""}
-      ${groups.map((g) => `
-        ${sectionTitle(`${g.emoji} ${g.title}`)}
-        <div class="slots">
-          ${slots.map((s, i) => s.set !== g ? "" : `
-            <div class="slot ${s.answer.found ? "found" : state === "over" ? "missed" : ""}" data-i="${i}">
-              ${showClues || state === "over" ? `<span class="small muted" style="min-width:74px">${esc(s.it.clue)}</span>` : ""}
-              <span class="nm">${s.answer.found || state === "over" ? displayName(s.answer.name) : ""}</span>
-              ${s.it.extra && (showExtra || state === "over") ? `<span class="small muted">${esc(s.it.extra)}</span>` : ""}
-            </div>`).join("")}
-        </div>`).join("")}`;
-
-    $("#mq-start", body)?.addEventListener("click", begin);
-    $("#mq-giveup", body)?.addEventListener("click", end);
-    $("#mq-retry", body)?.addEventListener("click", build);
-    const input = $("#mq-input", body);
-    if (input && state === "playing") {
-      input.focus();
-      input.addEventListener("input", () => check(input));
-    }
-  }
-
-  function begin() {
-    state = "playing";
-    draw();
-    timer = setInterval(() => {
-      remaining--;
-      const t = $("#mq-timer", el);
-      if (t) t.textContent = fmt(remaining);
-      if (remaining <= 0) end();
-    }, 1000);
-  }
-
-  function check(input) {
-    const guess = fold(input.value);
-    if (guess.length < 3) return;
-    let hit = false;
-    for (const a of answers.values()) {
-      if (!a.found && a.keys.has(guess)) {
-        a.found = true;
-        hit = true;
-      }
-    }
-    if (!hit) return;
-    input.value = "";
-    slots.forEach((s, i) => {
-      if (!s.answer.found) return;
-      const div = $(`.slot[data-i="${i}"]`, el);
-      if (div.classList.contains("found")) return;
-      div.classList.add("found");
-      $(".nm", div).innerHTML = displayName(s.answer.name);
+    const nAnswers = keysFor.size;
+    stop = nameQuiz($("#mq-body", el), {
+      title: groups.length === 1 ? groups[0].title : `${groups.length} lists${since ? ` since ${since}` : ""}`,
+      noun: cat.noun, groups,
+      seconds: Math.min(30 * 60, Math.max(90, nAnswers * 15)),
     });
-    $("#mq-score", el).textContent = `${foundCount()}/${answers.size}`;
-    if (foundCount() === answers.size) end();
   }
 
-  function end() {
-    stop();
-    state = "over";
-    draw();
-  }
-
-  function stop() {
-    if (timer) clearInterval(timer);
-    timer = null;
-  }
-
-  return stop;
+  return () => stop?.();
 }
 
-const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
