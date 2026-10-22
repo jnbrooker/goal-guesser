@@ -85,7 +85,7 @@ def tables(html):
         sup.decompose()
     for flag in soup.select("span.flagicon"):
         img, a = flag.find("img"), flag.find("a")
-        flag.replace_with(" " + ((a and a.get("title")) or (img and img.get("alt")) or "") + " ")
+        flag.replace_with(" ⟦" + ((a and a.get("title")) or (img and img.get("alt")) or "") + "⟧ ")
     for cell in soup.find_all(["td", "th"]):
         for attr in ("colspan", "rowspan"):
             if cell.has_attr(attr):
@@ -101,10 +101,20 @@ def tables(html):
     return out
 
 
-def text(v):
+def raw(v):
     if isinstance(v, pd.Series):  # duplicate column names (regular season + playoffs): take the first
         v = v.iloc[0] if len(v) else ""
-    s = "" if pd.isna(v) else str(v)
+    return "" if pd.isna(v) else str(v)
+
+
+def flag_of(v):
+    """Country from a flag marker in a cell, if any."""
+    m = re.search(r"⟦([^⟧]*)⟧", raw(v))
+    return m[1] if m else ""
+
+
+def text(v):
+    s = re.sub(r"⟦[^⟧]*⟧", "", raw(v))
     s = re.sub(r"\[.*?\]|[*†‡^§#¤]", "", s)
     return re.sub(r"\s+", " ", s).strip()
 
@@ -152,6 +162,8 @@ FIFA = {
 
 def nation(v):
     """"Spain ESP" -> "Spain" (flag link title plus the code); a bare code -> its country."""
+    if flag_of(v):
+        return flag_of(v)
     t = text(v)
     if t in FIFA:
         return FIFA[t]
@@ -170,7 +182,25 @@ def apps_value(s):
 
 # --- football ----------------------------------------------------------------------
 LEAGUE_COLS = {"esp": ("La Liga",), "ita": ("Serie A",), "ger": ("Bundesliga",), "fra": ("Ligue 1", "Division 1"),
-               "ucl": ("Champions League", "UEFA Champions League", "European Cup")}
+               "ucl": ("Champions League", "UEFA Champions League", "European Cup", "Europe")}
+
+
+def squash(x):
+    return re.sub(r"\s+", " ", str(x)).strip()
+
+
+def goalscorers(html, comp):
+    """Player -> goals in the competition, from a separate "Goalscorers" table."""
+    for h, df in tables(html):
+        if not re.search(r"scorer", h, re.I):
+            continue
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [c[-1] for c in df.columns]
+        player = col(df, "Player", "Name")
+        comp_c = next((c for c in df.columns if any(squash(c).startswith(n) for n in LEAGUE_COLS[comp])), None)
+        if player is not None and comp_c is not None:
+            return {text(r[player]): int(num(r[comp_c])) for _, r in df.iterrows() if text(r[player])}
+    return {}
 
 
 def football_squad(html, comp):
@@ -179,15 +209,16 @@ def football_squad(html, comp):
         if not isinstance(df.columns, pd.MultiIndex):
             continue
         player = col(df, "Player", "Name")
-        comp_cols = [c for c in df.columns if any(str(x).startswith(n) for x in c for n in LEAGUE_COLS[comp])]
+        comp_cols = [c for c in df.columns if any(squash(x).startswith(n) for x in c for n in LEAGUE_COLS[comp])]
         # Ignore position-group rows ("Goalkeepers" would match "goal").
         has = lambda c, *ks: any(str(x).lower().startswith(ks) for x in c
                                  if not re.match(r"(goalkeepers|defenders|midfielders|forwards|players)", str(x), re.I))
         apps_c = next((c for c in comp_cols if has(c, "app")), None)
         goals_c = next((c for c in comp_cols if has(c, "goal", "gls")), None)
         starts_c = next((c for c in comp_cols if has(c, "sts", "gs", "start")), None)
-        if player is None or apps_c is None or goals_c is None:
+        if player is None or apps_c is None:
             continue
+        scorers = goalscorers(html, comp) if goals_c is None else {}
         pos_c, nat_c = col(df, "Pos"), col(df, "Nat")
         players = []
         for _, r in df.iterrows():
@@ -200,11 +231,12 @@ def football_squad(html, comp):
             if starts_c is not None and st is None:
                 st = int(num(r[starts_c])) or None
             # Goalkeepers' columns sometimes show goals conceded as negatives.
-            g = re.match(r"^\s*(\d+)", text(r[goals_c]))
+            g = re.match(r"^\s*(\d+)", text(r[goals_c])) if goals_c is not None else None
+            goals = int(g[1]) if g else scorers.get(name, 0)
             players.append({
                 "name": name, "pos": position(r[pos_c]) if pos_c is not None else "",
-                "nat": nation(r[nat_c]) if nat_c is not None else "",
-                "apps": a, "starts": st, "goals": int(g[1]) if g else 0,
+                "nat": (nation(r[nat_c]) if nat_c is not None else "") or flag_of(r[player]),
+                "apps": a, "starts": st, "goals": goals,
             })
         if len(players) >= 11 and (best is None or len(players) > len(best)):
             best = players
@@ -252,10 +284,10 @@ def nba_positions(html):
 
 
 def nba_squad(html):
-    df = stat_table(html, ["Player", "GP"], r"regular season|player stat|statistics")
+    df = stat_table(html, ["Player", "GP"], r"regular season|player stat|statistics|^season$")
     if df is None:
         return None
-    ppg = col(df, "PPG", "PTS")
+    ppg, pts = col(df, "PPG"), col(df, "PTS")
     pos = nba_positions(html)
     out = []
     for _, r in df.iterrows():
@@ -263,7 +295,8 @@ def nba_squad(html):
         if name:
             out.append({"name": name, "pos": pos.get(name, ""), "nat": "", "apps": int(num(r["GP"])),
                         "starts": int(num(r["GS"])) if "GS" in df.columns else None,
-                        "stat": f"{num(r[ppg]):.1f} ppg" if ppg is not None else ""})
+                        "stat": f"{num(r[ppg]):.1f} ppg" if ppg is not None
+                        else f"{num(r[pts]) / max(1, num(r['GP'])):.1f} ppg" if pts is not None else ""})
     return out
 
 
@@ -308,6 +341,113 @@ def mlb_squad(html):
     return out or None
 
 
+# --- Champions League: line-up from the final, when the season page has no stats --------------
+def final_squad(season_label, team):
+    year = int(season_label[:4]) + 1
+    title = f"{year} UEFA Champions League final" if year >= 1993 else f"{year} European Cup final"
+    html = page_html(title)
+    if not html:
+        return None
+    soup = bs4.BeautifulSoup(html, "html.parser")
+    box = soup.select_one("div.footballbox")
+    home = box.select_one(".fhome").get_text(" ", strip=True) if box else ""
+    words = [w for w in re.findall(r"\w+", team.lower()) if len(w) > 2]
+    side = 0 if any(w in home.lower() for w in words) else 1
+    lineups = []
+    for t in soup.find_all("table"):
+        rows = [[c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])] for tr in t.find_all("tr")]
+        if t.find("table") is None and any(r[:1] == ["GK"] for r in rows):
+            lineups.append(rows)
+    if len(lineups) < 2:
+        return None
+    players, subs = [], False
+    for r in lineups[side]:
+        if r and r[0].startswith("Substitutes"):
+            subs = True
+            continue
+        if r and r[0].startswith("Manager"):
+            break
+        if len(r) >= 3 and re.match(r"^[A-Z]{1,3}$", r[0]):
+            name = re.sub(r"\(\s*c\s*\)", "", r[2]).strip()
+            came_on = subs and any(re.search(r"\d+'", x) for x in r[3:])
+            if subs and not came_on:
+                note = "unused sub in the final"
+            else:
+                note = "came on in the final" if subs else "started the final"
+            # "apps" only orders the slots here: starters, then subs who came on, then unused subs.
+            players.append({"name": name, "pos": position(r[0]), "nat": "", "apps": 3 if not subs else 2 if came_on else 1,
+                            "starts": None, "stat": note})
+    return players if len(players) >= 11 else None
+
+
+# --- NHL: Hockey-Reference has full rosters with positions and birth countries ----------------
+HR_TEAMS = {
+    "New York Islanders": "NYI", "Edmonton Oilers": "EDM", "Montreal Canadiens": "MTL", "Calgary Flames": "CGY",
+    "Pittsburgh Penguins": "PIT", "New York Rangers": "NYR", "New Jersey Devils": "NJD", "Colorado Avalanche": "COL",
+    "Detroit Red Wings": "DET", "Dallas Stars": "DAL", "Tampa Bay Lightning": "TBL", "Carolina Hurricanes": "CAR",
+    "Anaheim Ducks": "ANA", "Chicago Blackhawks": "CHI", "Boston Bruins": "BOS", "Los Angeles Kings": "LAK",
+    "Washington Capitals": "WSH", "St. Louis Blues": "STL", "Florida Panthers": "FLA", "Vegas Golden Knights": "VEG",
+}
+COUNTRY_CODES = {
+    "CA": "Canada", "US": "United States", "SE": "Sweden", "FI": "Finland", "RU": "Russia", "CZ": "Czech Republic",
+    "SK": "Slovakia", "DE": "Germany", "CH": "Switzerland", "LV": "Latvia", "DK": "Denmark", "NO": "Norway",
+    "AT": "Austria", "BY": "Belarus", "UA": "Ukraine", "KZ": "Kazakhstan", "GB": "United Kingdom", "FR": "France",
+    "SI": "Slovenia", "PL": "Poland", "NL": "Netherlands", "LT": "Lithuania", "IT": "Italy", "JP": "Japan",
+    "KR": "South Korea", "AU": "Australia", "BR": "Brazil", "ZA": "South Africa", "NG": "Nigeria", "VE": "Venezuela",
+    "BS": "Bahamas", "JM": "Jamaica", "HU": "Hungary", "SU": "Soviet Union", "CS": "Czechoslovakia", "TW": "Taiwan",
+}
+HR_CACHE = ROOT / ".cache" / "hockey_reference"
+
+
+def hr_page(abbr, year):
+    HR_CACHE.mkdir(parents=True, exist_ok=True)
+    path = HR_CACHE / f"{abbr}{year}.html"
+    if not path.exists():
+        url = f"https://www.hockey-reference.com/teams/{abbr}/{year}.html"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh) GoalGuesser/0.1"})
+        try:
+            with urllib.request.urlopen(req) as res:
+                path.write_text(res.read().decode("utf-8"))
+        except urllib.error.HTTPError:
+            return ""
+        finally:
+            time.sleep(4)  # Sports Reference asks for at most 20 requests a minute
+    return re.sub(r"<!--|-->", "", path.read_text())  # some tables are inside HTML comments
+
+
+def hr_squad(team, year):
+    abbr = HR_TEAMS.get(team)
+    html = hr_page(abbr, year) if abbr else ""
+    if not html:
+        return None
+    soup = bs4.BeautifulSoup(html, "html.parser")
+    cells = lambda tr: {c.get("data-stat"): c.get_text(strip=True) for c in tr.find_all(["th", "td"])}
+    roster = {}
+    for tr in (soup.select("table#roster tbody tr")):
+        c = cells(tr)
+        code = re.sub(r"[a-z]", "", c.get("flag", ""))[:2]
+        name = re.sub(r"\s*\((C|A)\)$", "", c.get("player", ""))  # captain / alternate markers
+        roster[name] = (COUNTRY_CODES.get(code, ""), c.get("pos", ""))
+    out = []
+    for tr in soup.select("table#player_stats tbody tr"):
+        c = cells(tr)
+        name = c.get("name_display", "")
+        if not name or c.get("pos") == "G":
+            continue
+        pos = "D" if c.get("pos") == "D" else "F"
+        out.append({"name": name, "pos": pos, "nat": roster.get(name, ("", ""))[0], "apps": int(c.get("games") or 0),
+                    "starts": None, "goals": int(c.get("goals") or 0),
+                    "stat": f"{c.get('goals') or 0} G · {c.get('assists') or 0} A"})
+    for tr in soup.select("table#goalie_stats tbody tr"):
+        c = cells(tr)
+        name = c.get("name_display", "")
+        if name:
+            out.append({"name": name, "pos": "G", "nat": roster.get(name, ("", ""))[0],
+                        "apps": int(c.get("goalie_games") or 0), "starts": None,
+                        "stat": f"{c.get('goals_against_avg', '')} GAA"})
+    return out if len(out) >= 15 else None
+
+
 # --- champions to fetch --------------------------------------------------------------
 def full_season(label):
     """"1999–00" -> "1999–2000" (Wikipedia's form); "2023–24" unchanged."""
@@ -332,7 +472,8 @@ COMPS = [
 
 
 NAT_CACHE = ROOT / ".cache" / "wikidata_nationality_us.json"
-OCCUPATION = {"nba": "Q3665646", "mlb": "Q10871364", "nhl": "Q11774891"}  # basketball/baseball/ice hockey player
+OCCUPATION = {"nba": "Q3665646", "mlb": "Q10871364", "nhl": "Q11774891",  # basketball/baseball/ice hockey player
+              "football": "Q937857"}
 
 
 def lookup_nationalities(sport, names):
@@ -375,26 +516,36 @@ def main():
             if (sport == "football" and year < FOOTBALL_SINCE) or (sport != "football" and year < US_SINCE):
                 continue
             season = full_season(season_label) if sport == "football" else us_season(sport, season_label)
-            title = find_page(season, team)
-            html = page_html(title) if title else ""
-            parse = {"football": lambda h: football_squad(h, cid), "nba": nba_squad, "mlb": mlb_squad, "nhl": nhl_squad}[sport]
-            try:
-                players = parse(html) if html else None
-            except Exception as e:  # one odd page shouldn't stop the whole build
-                print(f"  ! {label} {season} {team}: {e}")
-                players = None
+            note = ""
+            players = hr_squad(team, year) if sport == "nhl" else None
+            if players:
+                title, note = f"Hockey-Reference {HR_TEAMS[team]} {year}", "Stats from Hockey-Reference."
+            else:
+                title = find_page(season, team)
+                html = page_html(title) if title else ""
+                parse = {"football": lambda h: football_squad(h, cid), "nba": nba_squad, "mlb": mlb_squad, "nhl": nhl_squad}[sport]
+                try:
+                    players = parse(html) if html else None
+                except Exception as e:  # one odd page shouldn't stop the whole build
+                    print(f"  ! {label} {season} {team}: {e}")
+                    players = None
+            if not players and cid == "ucl":
+                players = final_squad(season_label, team)
+                if players:
+                    note = "No season stats on Wikipedia, so this is the squad from the final."
             if not players or len(players) < 8:
                 missing.append(f"{label} {season} {team}" + ("" if title else " (no page)"))
                 continue
-            order = {"football": "GDMF", "nba": "GFC", "mlb": "PH", "nhl": "GS"}[sport]
+            order = {"football": "GDMF", "nba": "GFC", "mlb": "PH", "nhl": "GDFS"}[sport]
             players.sort(key=lambda p: (order.find(p["pos"]) if p["pos"] in order and p["pos"] else 9, -p["apps"]))
-            squads.append({"season": season_label, "team": team, "source": title, "players": players})
+            squads.append({"season": season_label, "team": team, "source": title, "note": note, "players": players})
             print(f"{label:16} {season:10} {team:28} {len(players):3} players")
-        if sport != "football":
-            nat = lookup_nationalities(sport, [p["name"] for sq in squads for p in sq["players"]])
+        missing_nat = [p["name"] for sq in squads for p in sq["players"] if not p["nat"]]
+        if missing_nat:
+            nat = lookup_nationalities(sport, missing_nat)
             for sq in squads:
                 for p in sq["players"]:
-                    p["nat"] = nat.get(p["name"], "")
+                    p["nat"] = p["nat"] or nat.get(p["name"], "")
         out[cid] = {"label": label, "sport": sport, "squads": squads}
     OUT.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
     print(f"\n{sum(len(v['squads']) for v in out.values())} squads written; {len(missing)} skipped:")

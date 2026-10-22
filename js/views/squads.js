@@ -16,7 +16,7 @@ const POSITIONS = {
   football: { groups: [["G", "Goalkeepers"], ["D", "Defenders"], ["M", "Midfielders"], ["F", "Forwards"]], short: { G: "GK", D: "DF", M: "MF", F: "FW" } },
   nba: { groups: [["G", "Guards"], ["F", "Forwards"], ["C", "Centers"]], short: { G: "G", F: "F", C: "C" } },
   mlb: { groups: [["P", "Pitchers"], ["H", "Position players"]], short: { P: "P" } },
-  nhl: { groups: [["G", "Goaltenders"], ["S", "Skaters"]], short: { G: "G" } },
+  nhl: { groups: [["G", "Goaltenders"], ["D", "Defencemen"], ["F", "Forwards"], ["S", "Skaters"]], short: { G: "G", D: "D", F: "F" } },
 };
 const groupOf = (p, sport) => (POSITIONS[sport].groups.some(([g]) => g === p.pos) ? p.pos : "");
 
@@ -53,12 +53,13 @@ function competitions(pl, others) {
   };
   const rest = Object.entries(others).map(([id, comp]) => ({
     id, label: comp.label, sport: comp.sport,
-    squads: comp.squads.map((sq, i) => ({ key: `${i}`, season: sq.season, team: sq.team, players: sq.players })).reverse(),
+    squads: comp.squads.map((sq, i) => ({ key: `${i}`, season: sq.season, team: sq.team, note: sq.note, players: sq.players })).reverse(),
   }));
   return [plComp, ...rest].filter((c) => c.squads.length);
 }
 
 function statLine(p, sport) {
+  if (sport === "football" && p.stat) return p.stat; // line-up from a final
   if (sport === "football") {
     const starts = p.starts != null && p.starts !== p.apps ? ` (${p.starts} st)` : "";
     return `${p.apps} apps${starts} · ${p.goals ?? 0} gls`;
@@ -179,7 +180,7 @@ function quiz(el, comps) {
 
     $("#sq-note", el).textContent = comp.id === "pl"
       ? "Premier League appearances and goals only. Nationality comes from the match data up to 2019/20, then Wikidata."
-      : `From Wikipedia's ${cur.sq.season} ${cur.sq.team} season page; league stats where available.`;
+      : cur.sq.note || `From Wikipedia's ${cur.sq.season} ${cur.sq.team} season page; league stats where available.`;
     stop = nameQuiz($("#sq-body", el), {
       title: `${esc(cur.title)}${cur.champion ? " 🏆" : ""}`, noun: "player", groups,
       seconds: Math.min(20 * 60, Math.max(120, players.length * 12)),
