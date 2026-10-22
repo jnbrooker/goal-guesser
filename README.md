@@ -70,3 +70,10 @@ Check the printed counts against Wikipedia before committing.
 ```bash
 python3 scripts/build_misc.py
 ```
+
+## Champion squads
+
+**Misc → Champion Squads**: name every player in a squad, with position, country and season stats as clues.
+
+- **Premier League** (any club, any season): from `data/squads.json`, built by `scripts/build_data.py` from the same match data as the rest of the app. Appearances, starts and goals are league only. Nationality comes from the lineups up to 2019/20, then from [Wikidata](https://www.wikidata.org/).
+- **La Liga, Serie A, Bundesliga, Ligue 1, Champions League** (champions from 1990) and **NBA, MLB, NHL** (champions from 1980): from `data/champion_squads.json`, built by `scripts/build_squads.py` from Wikipedia club-season pages. Seasons whose page has no usable stats table are skipped and listed at the end of the build output.

@@ -8,6 +8,7 @@
 import { prefs } from "../store.js";
 import { $, $$, esc, sectionTitle, nameKeys, plural } from "../ui.js";
 import { fold } from "../data.js";
+import * as squads from "./squads.js";
 
 const SINCE = [0, 1900, 1950, 1980, 2000];
 
@@ -89,6 +90,7 @@ function miscCategory(c) {
 }
 
 export function render(el, params, arg) {
+  if (arg === "squads") return squads.render(el);
   let cleanup = null;
   el.innerHTML = `<div class="empty">Loading…</div>`;
   loadAll().then((cats) => {
@@ -99,6 +101,7 @@ export function render(el, params, arg) {
         <div class="pagehead"><h1>Misc</h1><span class="sub">Name-them-all quizzes beyond the Premier League.</span></div>
         ${sectionTitle("Categories")}
         <div class="card modelist">
+          <a href="#/misc/squads"><b>Champion Squads</b><span>Name every player in a title-winning squad — Premier League, Europe's top leagues, Champions League, NBA, MLB and NHL</span></a>
           ${cats.map((c) => `<a href="#/misc/${c.id}"><b>${esc(c.title)}</b><span>${esc(c.sub)}</span></a>`).join("")}
         </div>
       </div>`;
