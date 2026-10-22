@@ -111,7 +111,7 @@ export function clubRank(row) {
 
 export function fold(s) {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
-    .replace(/ø/g, "o").replace(/[^a-z' -]/g, "").replace(/['-]/g, " ").replace(/\s+/g, " ").trim();
+    .replace(/ø/g, "o").replace(/[^a-z0-9' -]/g, "").replace(/['-]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 const CLUB_COLOURS = {

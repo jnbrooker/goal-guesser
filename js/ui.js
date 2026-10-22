@@ -228,7 +228,7 @@ export async function renderGoalLog(el, r) {
  */
 export function nameKeys(name) {
   const [main, ...titles] = name.split(", ");
-  const f = fold(main).replace(/ the (younger|elder)$/, "");
+  const f = fold(main).replace(/ the (younger|elder)$/, "").replace(/ (jr|sr|ii|iii|iv)$/, "");
   const parts = f.split(" ");
   const keys = new Set([fold(main), f, f.replace(/ /g, "")]);
   if (parts.length > 1) {
