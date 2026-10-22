@@ -52,6 +52,11 @@ def tables(title):
         br.replace_with(" / ")
     for sup in soup.find_all("sup"):
         sup.decompose()  # footnote markers
+    for cell in soup.find_all(["td", "th"]):
+        for attr in ("colspan", "rowspan"):  # some pages have typos like colspan="3”"
+            if cell.has_attr(attr):
+                digits = re.sub(r"\D", "", cell[attr])
+                cell[attr] = digits or "1"
     out = []
     for t in soup.select("table.wikitable"):
         h = t.find_previous(["h2", "h3", "h4"])
@@ -98,7 +103,7 @@ def names(cell):
 def rows(df, label_col, value_col, clue_col=None, label=lambda v: str(v)):
     items = []
     for _, r in df.iterrows():
-        lab = str(r[label_col]).strip()
+        lab = re.sub(r"[*^†‡§#¤]|\[.*?\]", "", str(r[label_col])).strip()
         if not re.match(r"^\d{4}", lab):
             continue
         clue = clean(r[clue_col]) if clue_col and not pd.isna(r[clue_col]) else ""
@@ -207,6 +212,25 @@ def award_by_heading(title, heading, person_col):
     return rows(table(title, heading, "Year"), "Year", person_col, "Team")
 
 
+def award(title, heading=None):
+    """Winners of an award, from every winners table on the page (some split by era)."""
+    items = []
+    for h, df in tables(title):
+        if heading and heading.lower() not in h.lower():
+            continue
+        if re.search(r"multiple|team|by |record|nominee|finalist", h, re.I):
+            continue
+        year = next((c for c in df.columns if str(c) in ("Season", "Year")), None)
+        person = next((c for c in df.columns if str(c) in ("Player", "Winner", "Recipient")), None)
+        if year is None or person is None:
+            continue
+        team = "Team" if "Team" in df.columns else None
+        items += rows(df, year, person, team, label=season if str(year) == "Season" else str)
+    if not items:
+        raise SystemExit(f"{title}: no winners table")
+    return sorted(items, key=lambda it: it[1])
+
+
 CATEGORIES = [
     {
         "id": "football", "title": "Football Champions", "kind": "club",
@@ -247,20 +271,83 @@ CATEGORIES = [
         ],
     },
     {
-        "id": "baseball-awards", "title": "Baseball Awards", "kind": "person",
-        "sub": "Cy Young and Rookie of the Year winners",
+        "id": "nfl-awards", "title": "NFL Awards", "kind": "person",
+        "sub": "MVP, Super Bowl MVP, player of the year, rookie and comeback awards (AP)",
         "sets": [
+            ("mvp", "MVP", "🏈", "AP NFL Most Valuable Player", nfl_mvp),
+            ("sb-mvp", "Super Bowl MVP", "🏆", "Super Bowl Most Valuable Player",
+             lambda: award("Super Bowl Most Valuable Player Award")),
+            ("opoy", "Offensive POY", "🏈", "AP Offensive Player of the Year",
+             lambda: award("AP NFL Offensive Player of the Year Award")),
+            ("dpoy", "Defensive POY", "🛡️", "AP Defensive Player of the Year",
+             lambda: award("AP NFL Defensive Player of the Year Award")),
+            ("oroy", "Offensive ROY", "🌱", "AP Offensive Rookie of the Year",
+             lambda: award("AP NFL Offensive Rookie of the Year Award", "Offensive")),
+            ("droy", "Defensive ROY", "🌱", "AP Defensive Rookie of the Year",
+             lambda: award("AP NFL Offensive Rookie of the Year Award", "Defensive")),
+            ("comeback", "Comeback POY", "🔁", "AP Comeback Player of the Year",
+             lambda: award("AP NFL Comeback Player of the Year Award")),
+        ],
+    },
+    {
+        "id": "nba-awards", "title": "NBA Awards", "kind": "person",
+        "sub": "MVP, Finals MVP, Defensive Player, Rookie, Sixth Man and Most Improved",
+        "sets": [
+            ("mvp", "MVP", "🏀", "NBA Most Valuable Player", nba_mvp),
+            ("finals-mvp", "Finals MVP", "🏆", "Bill Russell NBA Finals MVP",
+             lambda: award("Bill Russell NBA Finals Most Valuable Player Award")),
+            ("dpoy", "Defensive POY", "🛡️", "NBA Defensive Player of the Year",
+             lambda: award("NBA Defensive Player of the Year Award")),
+            ("roy", "Rookie of the Year", "🌱", "NBA Rookie of the Year",
+             lambda: award("NBA Rookie of the Year Award")),
+            ("sixth", "Sixth Man", "6️⃣", "NBA Sixth Man of the Year",
+             lambda: award("NBA Sixth Man of the Year Award")),
+            ("mip", "Most Improved", "📈", "NBA Most Improved Player",
+             lambda: award("NBA Most Improved Player Award")),
+        ],
+    },
+    {
+        "id": "nhl-awards", "title": "NHL Awards", "kind": "person",
+        "sub": "Hart, Conn Smythe, Calder, Vezina, Norris, Art Ross, Rocket Richard, Selke and Ted Lindsay",
+        "sets": [
+            ("hart", "Hart (MVP)", "🏒", "Hart Memorial Trophy — MVP", hart),
+            ("conn-smythe", "Conn Smythe", "🏆", "Conn Smythe Trophy — playoff MVP",
+             lambda: award("Conn Smythe Trophy")),
+            ("calder", "Calder (rookie)", "🌱", "Calder Memorial Trophy — rookie of the year",
+             lambda: award("Calder Memorial Trophy")),
+            ("vezina", "Vezina (goalie)", "🥅", "Vezina Trophy — best goaltender",
+             lambda: award("Vezina Trophy")),
+            ("norris", "Norris (defence)", "🛡️", "James Norris Memorial Trophy — best defenceman",
+             lambda: award("James Norris Memorial Trophy")),
+            ("art-ross", "Art Ross (points)", "📊", "Art Ross Trophy — most points",
+             lambda: award("Art Ross Trophy")),
+            ("richard", "Rocket Richard (goals)", "🚨", "Maurice \"Rocket\" Richard Trophy — most goals",
+             lambda: award('Maurice "Rocket" Richard Trophy')),
+            ("selke", "Selke (defensive fwd)", "🧱", "Frank J. Selke Trophy — best defensive forward",
+             lambda: award("Frank J. Selke Trophy")),
+            ("lindsay", "Ted Lindsay", "🤝", "Ted Lindsay Award — MVP voted by the players",
+             lambda: award("Ted Lindsay Award")),
+        ],
+    },
+    {
+        "id": "mlb-awards", "title": "MLB Awards", "kind": "person",
+        "sub": "MVPs, World Series MVP, Cy Young and Rookie of the Year",
+        "sets": [
+            ("al-mvp", "AL MVP", "⚾", "American League MVP", lambda: mlb_mvp("AL")),
+            ("nl-mvp", "NL MVP", "⚾", "National League MVP", lambda: mlb_mvp("NL")),
+            ("ws-mvp", "World Series MVP", "🏆", "World Series Most Valuable Player",
+             lambda: award("World Series Most Valuable Player Award")),
             ("cy-al", "Cy Young (AL)", "⚾", "American League Cy Young Award (from 1967)",
              lambda: award_by_heading("Cy Young Award", "American League", "Pitcher")),
             ("cy-nl", "Cy Young (NL)", "⚾", "National League Cy Young Award (from 1967)",
              lambda: award_by_heading("Cy Young Award", "National League", "Pitcher")),
             ("cy-mlb", "Cy Young (1956–66)", "⚾", "Cy Young Award when there was one for all of MLB",
              lambda: award_by_heading("Cy Young Award", "combined", "Pitcher")),
-            ("roy-al", "Rookie of the Year (AL)", "⚾", "American League Rookie of the Year (from 1949)",
+            ("roy-al", "Rookie of the Year (AL)", "🌱", "American League Rookie of the Year (from 1949)",
              lambda: award_by_heading("Major League Baseball Rookie of the Year Award", "American League", "Player")),
-            ("roy-nl", "Rookie of the Year (NL)", "⚾", "National League Rookie of the Year (from 1949)",
+            ("roy-nl", "Rookie of the Year (NL)", "🌱", "National League Rookie of the Year (from 1949)",
              lambda: award_by_heading("Major League Baseball Rookie of the Year Award", "National League", "Player")),
-            ("roy-mlb", "Rookie of the Year (1947–48)", "⚾", "Rookie of the Year when there was one for all of MLB",
+            ("roy-mlb", "Rookie of the Year (1947–48)", "🌱", "Rookie of the Year when there was one for all of MLB",
              lambda: award_by_heading("Major League Baseball Rookie of the Year Award", "combined", "Player")),
         ],
     },

@@ -9,7 +9,7 @@ const MODES = [
   ["#/list", "Name Them", "Sporcle-style: name every scorer in a season against the clock"],
   ["#/higher-lower", "Higher or Lower", "Did they score more or fewer? Keep the streak alive"],
   ["#/browse", "Season Tables", "Every scorer, every club, every season since 1992/93"],
-  ["#/misc", "Misc", "World leaders, Champions League & league winners, US sports champions, MVPs and awards"],
+  ["#/misc", "Misc", "World leaders, football champions, and NFL, NBA, NHL and MLB champions and awards"],
 ];
 
 export function render(el) {

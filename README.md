@@ -14,7 +14,7 @@ A static site (plain HTML/CSS/JS, no build step) that runs on GitHub Pages.
 | **Test** | A marked paper mixing written, multiple choice, true/false, who-scored-more and which-club questions |
 | **Name Them** | Sporcle-style list quiz: name every scorer in a season or club against the clock |
 | **Higher/Lower** | Streak game comparing two player-seasons |
-| **Misc** | Sporcle-style name-them-all quizzes: world leaders (21 countries), Champions League and top-five league champions, US sports champions (NFL, NBA, MLB, NHL), MVPs, Cy Young and Rookie of the Year |
+| **Misc** | Sporcle-style name-them-all quizzes: world leaders (21 countries), Champions League and top-five league champions, US sports champions (NFL, NBA, MLB, NHL), and each league's major awards (MVPs, rookie, defensive, Cy Young, Vezina, Norris and more) |
 
 Each mode has a deck filter (seasons, club, minimum goals). Progress is saved in the browser's localStorage, using a Leitner box per player-season. A player-season counts as mastered after three correct answers in a row.
 
