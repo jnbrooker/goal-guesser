@@ -15,7 +15,10 @@ import { prefs } from "./store.js";
  * @param {object} cfg
  *   title     quiz bar title (HTML)
  *   noun      "player", "leader", … for the result line
- *   groups    [{ title?, slots: [{ answer, name, keys, label?, left?(over), right?(over) }] }]
+ *   groups    [{ title?, layout?, variant?, rows?, slots: [{ answer, name, keys, label?, left?(over), right?(over) }] }]
+ *             layout "cards": two-line cards (clues above a full-width name);
+ *             layout "pitch": cards arranged in `rows` (display order, top to bottom) on a
+ *             pitch/court/rink (`variant`); `slots` still gives the hard-mode order
  *             answer: id shared by slots with the same answer; name: display HTML;
  *             keys: Set of accepted folded spellings; label: plain-text clue for hard mode
  *   seconds   time limit
@@ -44,7 +47,15 @@ export function nameQuiz(el, cfg) {
       return;
     }
     const over = state === "over";
-    let idx = 0;
+    const index = new Map(slots.map((s, i) => [s, i]));
+    const group = (g) => {
+      if (g.layout === "pitch") {
+        return `<div class="pitch ${g.variant || ""}">${g.rows.map((row) => `
+          <div class="pitch-row">${row.map((s) => slotHtml(s, index.get(s), over, true)).join("")}</div>`).join("")}</div>`;
+      }
+      const cards = g.layout === "cards";
+      return `<div class="slots${cards ? " cards" : ""}">${g.slots.map((s) => slotHtml(s, index.get(s), over, cards)).join("")}</div>`;
+    };
     el.innerHTML = `
       <div class="quizbar">
         <b style="font-size:14px">${cfg.title}</b>
@@ -61,9 +72,7 @@ export function nameQuiz(el, cfg) {
       </div>
       ${over ? resultLine() : ""}
       ${state === "ready" && hard ? `<div class="small muted" style="margin:8px 0">Hard mode: answer one slot at a time — click a slot to jump to it. One guess each; press Enter on an empty box to skip.</div>` : ""}
-      ${cfg.groups.map((g) => `
-        ${g.title ? sectionTitle(g.title) : ""}
-        <div class="slots">${g.slots.map((s) => slotHtml(s, idx++, over)).join("")}</div>`).join("")}`;
+      ${cfg.groups.map((g) => `${g.title ? sectionTitle(g.title) : ""}${group(g)}`).join("")}`;
 
     $("#nq-start", el)?.addEventListener("click", begin);
     $("#nq-giveup", el)?.addEventListener("click", end);
@@ -91,16 +100,18 @@ export function nameQuiz(el, cfg) {
     }
   }
 
-  function slotHtml(s, i, over) {
+  function slotHtml(s, i, over, card = false) {
     const st = status[i];
     const cls = st === "ok" ? "found" : st === "bad" || over ? "missed" : "";
     const isActive = hard && state === "playing" && i === active;
     const shown = st === "ok" || over;
-    return `<div class="slot ${cls}${isActive ? " active" : ""}${hard && state === "playing" && st === undefined ? " pickable" : ""}" data-i="${i}">
-      ${s.left ? s.left(over) : ""}
-      <span class="nm">${shown ? s.name : st === "bad" ? "✗" : ""}${over && guesses[i] ? ` <span class="guess">(${esc(guesses[i])})</span>` : ""}</span>
-      ${s.right ? s.right(over) : ""}
-    </div>`;
+    const name = `<span class="nm">${shown ? s.name : st === "bad" ? "✗" : ""}${over && guesses[i] ? ` <span class="guess">(${esc(guesses[i])})</span>` : ""}</span>`;
+    const classes = `slot${card ? " card" : ""} ${cls}${isActive ? " active" : ""}${hard && state === "playing" && st === undefined ? " pickable" : ""}`;
+    if (card) {
+      const clues = [s.left?.(over), s.right?.(over)].filter(Boolean).join("");
+      return `<div class="${classes}" data-i="${i}">${clues ? `<div class="clues">${clues}</div>` : ""}${name}</div>`;
+    }
+    return `<div class="${classes}" data-i="${i}">${s.left ? s.left(over) : ""}${name}${s.right ? s.right(over) : ""}</div>`;
   }
 
   function prompt() {

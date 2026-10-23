@@ -342,7 +342,7 @@ table.dg td.barcell { width: 38%; }
   display: flex; align-items: center; gap: 14px; padding: 8px 10px; border: 1px solid var(--line);
   background: var(--panel-2); position: sticky; top: 46px; z-index: 5; flex-wrap: wrap;
 }
-.quizbar input { font-size: 16px; padding: 6px 10px; border: 1px solid var(--line); width: 280px; max-width: 100%; background: var(--bg); }
+.quizbar input[type=text] { font-size: 16px; padding: 6px 10px; border: 1px solid var(--line); width: 280px; max-width: 100%; background: var(--bg); }
 .quizbar .score { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .quizbar .timer { font-size: 20px; font-family: var(--mono); font-weight: 700; }
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 0 14px; margin-top: 10px; }
@@ -402,3 +402,46 @@ tr.logrow:hover > td { background: var(--panel-2); }
 .slot.pickable:hover { background: var(--panel-2); }
 .slot.active { outline: 2px solid var(--green); outline-offset: -2px; background: var(--green-soft); }
 .slot .guess { font-weight: 400; color: var(--muted); font-size: 11px; text-decoration: line-through; }
+
+/* squad cards: clues on top, the full name underneath */
+.slots.cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.slot.card {
+  flex-direction: column; align-items: stretch; gap: 3px; padding: 6px 8px; min-height: 52px;
+  border: 1px solid var(--line); border-radius: 3px; background: var(--bg);
+}
+.slot.card .clues { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 11px; color: var(--ink-2); }
+.slot.card .clues .badge { background: var(--green-dark); color: #fff; }
+.slot.card .nm { white-space: normal; overflow: visible; text-overflow: clip; font-size: 13px; min-height: 18px; border-bottom: 1px dashed var(--line); }
+.slot.card.found .nm, .slot.card.missed .nm { border-bottom-color: transparent; }
+
+/* formation: pitch / court / rink */
+.pitch {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px 10px; border-radius: 6px;
+  border: 2px solid #1f5c38; margin-bottom: 6px;
+  background:
+    linear-gradient(rgba(255,255,255,.35), rgba(255,255,255,.35)) center / 100% 2px no-repeat,
+    repeating-linear-gradient(0deg, #2f7d50 0 44px, #2a7149 44px 88px);
+}
+.pitch.court { border-color: #a46a35; background: repeating-linear-gradient(90deg, #d8a46c 0 26px, #cf9a61 26px 52px); }
+.pitch.rink { border-color: #8fb3d6; background:
+  linear-gradient(#c0392b, #c0392b) center / 100% 3px no-repeat, #edf4fb; }
+.pitch-row { display: flex; justify-content: space-evenly; gap: 8px; }
+.pitch .slot.card {
+  /* cards stay light on the coloured background in both themes */
+  --ink: #0f0f0f; --ink-2: rgba(15,15,15,.75); --muted: rgba(15,15,15,.55); --line: #c9c9c9;
+  flex: 0 1 160px; min-width: 0; text-align: center; color: var(--ink);
+  background: rgba(255,255,255,.95); border-color: transparent; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.pitch .slot.card .clues { justify-content: center; }
+.pitch .slot.card .nm { font-weight: 700; }
+.pitch .slot.card.found { background: #d9f2e2; }
+.pitch .slot.card.missed { background: #fadede; }
+.pitch .slot.card.active { outline: 3px solid #ffd54a; outline-offset: 0; }
+@media (max-width: 700px) {
+  .pitch { padding: 10px 4px; gap: 8px; }
+  .pitch-row { gap: 4px; }
+  .pitch .slot.card { padding: 4px 3px; flex-basis: 31%; }
+  .pitch .slot.card .nm { font-size: 11px; }
+  .pitch .slot.card .clues { font-size: 9.5px; }
+  .slots.cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}

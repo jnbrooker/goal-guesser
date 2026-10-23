@@ -58,6 +58,63 @@ function competitions(pl, others) {
   return [plComp, ...rest].filter((c) => c.squads.length);
 }
 
+const rank = (order, pos) => (order.includes(pos) ? order.indexOf(pos) : order.length);
+const byUse = (a, b) => b.apps - a.apps || (b.goals ?? 0) - (a.goals ?? 0);
+const top = (players, pos, n, key = byUse) => players.filter((p) => p.pos === pos).sort(key).slice(0, n);
+const benchTitle = { football: "Bench", nba: "Bench", nhl: "Rest of the roster", mlb: "Bench & bullpen" };
+
+/**
+ * The squad's "first team" for display: a football XI in formation, the NBA's
+ * starting five, the NHL's top line, MLB's everyday lineup and main pitchers.
+ * Returns [{ title, players (hard-mode order), rows? (display, top to bottom), variant? }].
+ */
+function startingLineup(players, sport) {
+  if (sport === "football") {
+    // Squads from a final: the actual starting XI.
+    let xi = players.filter((p) => p.stat === "started the final");
+    if (xi.length !== 11) {
+      const gk = top(players, "G", 1);
+      const def = top(players, "D", 4);
+      const rest = players.filter((p) => p.pos === "M" || p.pos === "F").sort(byUse);
+      const mf = rest.slice(0, 10 - def.length);
+      // Always at least one forward up front.
+      if (!mf.some((p) => p.pos === "F")) {
+        const fw = rest.find((p) => p.pos === "F");
+        if (fw) mf[mf.length - 1] = fw;
+      }
+      xi = [...gk, ...def, ...mf];
+    }
+    const line = (pos) => xi.filter((p) => p.pos === pos);
+    if (xi.length !== 11 || line("G").length !== 1) return [];
+    const shape = [line("D").length, line("M").length, line("F").length].filter(Boolean).join("-");
+    return [{
+      title: `Most-used XI (${shape})`, variant: "",
+      players: [...line("G"), ...line("D"), ...line("M"), ...line("F")],
+      rows: [line("F"), line("M"), line("D"), line("G")].filter((r) => r.length),
+    }];
+  }
+  if (sport === "nba") {
+    const hasStarts = players.some((p) => p.starts != null);
+    const five = [...players].sort((a, b) => (hasStarts ? (b.starts ?? 0) - (a.starts ?? 0) : 0) || b.apps - a.apps).slice(0, 5)
+      .sort((a, b) => rank(["G", "F", "C"], a.pos) - rank(["G", "F", "C"], b.pos));
+    return five.length === 5 ? [{ title: hasStarts ? "Starting five (most starts)" : "Most-used five", variant: "court", players: five, rows: [five] }] : [];
+  }
+  if (sport === "nhl") {
+    // Skaters by goals (the recognisable top line); goalie by games.
+    const byGoals = (a, b) => (b.goals ?? 0) - (a.goals ?? 0) || b.apps - a.apps;
+    const g = top(players, "G", 1), d = top(players, "D", 2, byGoals), f = top(players, "F", 3, byGoals);
+    if (g.length + d.length + f.length < 6) return [];
+    return [{ title: "Top line (top scorers, No. 1 goalie)", variant: "rink", players: [...g, ...d, ...f], rows: [f, d, g] }];
+  }
+  if (sport === "mlb") {
+    return [
+      { title: "Everyday lineup (most games)", players: top(players, "H", 9) },
+      { title: "Most-used pitchers", players: top(players, "P", 5) },
+    ].filter((g) => g.players.length);
+  }
+  return [];
+}
+
 function statLine(p, sport) {
   if (sport === "football" && p.stat) return p.stat; // line-up from a final
   if (sport === "football") {
@@ -168,15 +225,26 @@ function quiz(el, comps) {
         answer: p.name, name: esc(p.name), keys,
         label: [show.pos && badge, show.nat && p.nat, show.stats && statLine(p, comp.sport)].filter(Boolean).join(", "),
         left: () => [
-          show.pos && badge ? `<span class="badge" style="background:var(--green-dark);color:#fff">${badge}</span>` : "",
-          show.nat && p.nat ? `<span class="small" style="min-width:90px">${esc(p.nat)}</span>` : "",
-          show.stats ? `<span class="small muted" style="min-width:110px">${esc(statLine(p, comp.sport))}</span>` : "",
+          show.pos && badge ? `<span class="badge">${badge}</span>` : "",
+          show.nat && p.nat ? `<span>${esc(p.nat)}</span>` : "",
+          show.stats ? `<span class="muted">${esc(statLine(p, comp.sport))}</span>` : "",
         ].join(""),
       };
     };
-    const groups = [...pos.groups, ["", "Squad"]]
-      .map(([g, label]) => ({ title: label, slots: players.filter((p) => groupOf(p, comp.sport) === g).map(slotFor) }))
-      .filter((g) => g.slots.length);
+    const lineup = startingLineup(players, comp.sport);
+    const used = new Set(lineup.flatMap((g) => g.players));
+    const order = pos.groups.map(([g]) => g);
+    const bench = players.filter((p) => !used.has(p))
+      .sort((a, b) => rank(order, a.pos) - rank(order, b.pos) || b.apps - a.apps);
+    const slotOf = new Map(players.map((p) => [p, slotFor(p)]));
+    const groups = [
+      ...lineup.map((g) => ({
+        title: g.title, layout: g.rows ? "pitch" : "cards", variant: g.variant,
+        rows: g.rows?.map((row) => row.map((p) => slotOf.get(p))),
+        slots: g.players.map((p) => slotOf.get(p)),
+      })),
+      { title: lineup.length ? benchTitle[comp.sport] : "Squad", layout: "cards", slots: bench.map((p) => slotOf.get(p)) },
+    ].filter((g) => g.slots.length);
 
     $("#sq-note", el).textContent = comp.id === "pl"
       ? "Premier League appearances and goals only. Nationality comes from the match data up to 2019/20, then Wikidata."
