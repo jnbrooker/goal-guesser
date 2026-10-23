@@ -2,9 +2,9 @@
 // lists and Champion Squads.
 //
 // Normal mode: type freely; a correct answer fills every slot it belongs to.
-// Hard mode: one slot at a time — pick a slot (or take the highlighted one),
-// type a guess and press Enter. Each slot gets one guess: right fills just
-// that slot, wrong locks it as a miss. Enter on an empty box skips ahead.
+// Hard mode: one slot at a time — pick a slot (or take the highlighted one)
+// and type. A correct answer fills just that slot and moves on straight away;
+// pressing Enter locks in a wrong guess as a miss. Enter on an empty box skips.
 
 import { $, $$, esc, plural, sectionTitle } from "./ui.js";
 import { fold } from "./data.js";
@@ -71,7 +71,7 @@ export function nameQuiz(el, cfg) {
         ${state === "playing" ? `<button class="btn ghost" id="nq-giveup">Give up</button>` : ""}
       </div>
       ${over ? resultLine() : ""}
-      ${state === "ready" && hard ? `<div class="small muted" style="margin:8px 0">Hard mode: answer one slot at a time — click a slot to jump to it. One guess each; press Enter on an empty box to skip.</div>` : ""}
+      ${state === "ready" && hard ? `<div class="small muted" style="margin:8px 0">Hard mode: answer one slot at a time — click a slot to jump to it. Correct answers are taken as you type; press Enter to lock in a wrong guess, or on an empty box to skip.</div>` : ""}
       ${cfg.groups.map((g) => `${g.title ? sectionTitle(g.title) : ""}${group(g)}`).join("")}`;
 
     $("#nq-start", el)?.addEventListener("click", begin);
@@ -87,6 +87,10 @@ export function nameQuiz(el, cfg) {
       if (hard) {
         input.addEventListener("keydown", (e) => {
           if (e.key === "Enter") { e.preventDefault(); submitHard(input.value); }
+        });
+        // A correct answer is taken as soon as it's typed; Enter is only for a wrong guess or a skip.
+        input.addEventListener("input", () => {
+          if (slots[active]?.keys.has(fold(input.value))) submitHard(input.value);
         });
         $("#nq-skip", el).addEventListener("click", () => submitHard(""));
         $$(".slot", el).forEach((d) => d.addEventListener("click", () => {
