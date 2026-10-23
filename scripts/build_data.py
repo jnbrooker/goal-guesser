@@ -66,6 +66,7 @@ RENAME = {
     "Benjamin White": "Ben White", "Benjamin Chilwell": "Ben Chilwell",
     "Santiago Ignacio Bueno": "Santiago Bueno", "João Jota Silva": "Jota Silva",
     "Rodrigo Martins Gomes": "Rodrigo Gomes", "Paquetá": "Lucas Paquetá",
+    "Rúben Nascimento Vinagre": "Rúben Vinagre",
 }
 
 
@@ -190,8 +191,11 @@ def guess_name(first, second, web):
 
 def th_match(first, second, guess):
     f1, s_last = first.split()[0], second.split()[-1]
-    cands = (guess, f"{first} {second}", f"{f1} {s_last}", f"{f1} {second}", f"{first} {s_last}")
-    for index in (th_by_fold, th_by_fold_all):
+    loose = (guess, f"{first} {second}", f"{f1} {s_last}", f"{f1} {second}", f"{first} {s_last}")
+    # Partial-name guesses ("David Martín" from "David Raya Martín") are only safe
+    # against scorers; against every lineup name they find namesakes (David Martin).
+    strict = (guess, f"{first} {second}")
+    for index, cands in ((th_by_fold, loose), (th_by_fold_all, strict)):
         for cand in cands:
             keys = index.get(fold(cand), [])
             if len(keys) == 1:

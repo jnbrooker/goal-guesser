@@ -9,6 +9,9 @@ import { DB } from "../data.js";
 import { prefs } from "../store.js";
 import { $, $$, esc, nameKeys } from "../ui.js";
 import { nameQuiz } from "../namequiz.js";
+import { learnSquad, matchUp } from "./squadmodes.js";
+
+const MODES = [["name", "Name them"], ["learn", "Learn"], ["match", "Match up"]];
 import { fold } from "../data.js";
 
 // Position groups and badges per sport ("" = unknown position).
@@ -138,6 +141,7 @@ function quiz(el, comps) {
   let squadKey = comp.squads[0].key;
   let club = null; // Premier League only: a club other than the champion
   let minApps = prefs.get("squads-minapps", 1);
+  let mode = prefs.get("squads-mode", "name");
   const show = { pos: true, nat: true, stats: true, ...prefs.get("squads-show", {}) };
   let stop = null;
 
@@ -160,6 +164,10 @@ function quiz(el, comps) {
     const sq = current().sq;
     $("#sq-setup", el).innerHTML = `
       <div class="controls">
+        <div class="ctl" style="flex-basis:100%"><span class="lbl">Mode</span>
+          <div class="btnrow" style="gap:4px">
+            ${MODES.map(([id, label]) => `<span class="chip${id === mode ? " on" : ""}" data-mode="${id}">${label}</span>`).join("")}
+          </div></div>
         <div class="ctl" style="flex-basis:100%"><span class="lbl">Competition</span>
           <div class="btnrow" style="gap:4px">
             ${comps.map((c) => `<span class="chip${c === comp ? " on" : ""}" data-comp="${c.id}">${esc(c.label)}
@@ -180,6 +188,12 @@ function quiz(el, comps) {
         </div></div>
         <div class="ctl"><span class="lbl">&nbsp;</span><button class="btn ghost" id="sq-random">🎲 Random squad</button></div>
       </div>`;
+    $$("[data-mode]", el).forEach((chip) => (chip.onclick = () => {
+      mode = chip.dataset.mode;
+      prefs.set("squads-mode", mode);
+      setup();
+      build();
+    }));
     $$("[data-comp]", el).forEach((chip) => (chip.onclick = () => {
       comp = comps.find((c) => c.id === chip.dataset.comp);
       prefs.set("squads-comp", comp.id);
@@ -249,6 +263,17 @@ function quiz(el, comps) {
     $("#sq-note", el).textContent = comp.id === "pl"
       ? "Premier League appearances and goals only. Nationality comes from the match data up to 2019/20, then Wikidata."
       : cur.sq.note || `From Wikipedia's ${cur.sq.season} ${cur.sq.team} season page; league stats where available.`;
+    const title = `${cur.title}${cur.champion ? " 🏆" : ""}`;
+    const storeKey = `${comp.id}|${cur.title}`;
+    const clue = (p) => slotOf.get(p).left();
+    if (mode === "learn") {
+      stop = learnSquad($("#sq-body", el), players, { title, storeKey, clue, keys: (p) => slotOf.get(p).keys });
+      return;
+    }
+    if (mode === "match") {
+      stop = matchUp($("#sq-body", el), players, { title, storeKey, clue });
+      return;
+    }
     stop = nameQuiz($("#sq-body", el), {
       title: `${esc(cur.title)}${cur.champion ? " 🏆" : ""}`, noun: "player", groups,
       seconds: Math.min(20 * 60, Math.max(120, players.length * 12)),

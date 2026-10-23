@@ -445,3 +445,13 @@ tr.logrow:hover > td { background: var(--panel-2); }
   .pitch .slot.card .clues { font-size: 9.5px; }
   .slots.cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
+
+/* Champion Squads: match up */
+.matchboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.matchcol { display: flex; flex-direction: column; gap: 6px; }
+.matchcard { cursor: pointer; text-align: left; font: inherit; color: inherit; min-height: 46px; justify-content: center; }
+.matchcard:hover:not(:disabled) { border-color: var(--green); }
+.matchcard.namecard .nm { border-bottom: 0; font-weight: 700; }
+.matchcard.active { outline: 2px solid var(--green); outline-offset: -2px; background: var(--green-soft); }
+.matchcard.found { opacity: .35; background: var(--green-soft); cursor: default; }
+.matchcard.missed { background: var(--red-soft); border-color: var(--red); }
